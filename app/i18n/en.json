@@ -63,7 +63,7 @@
   "admin.access_denied": "🚫 <b>Access denied</b>\n\nThis command is only available to administrators.",
   "admin.already_admin": "ℹ️ <b>Already an admin</b>\n\nUse /admin to access the panel.",
   "admin.activated": "✅ <b>Admin key activated</b>\n━━━━━━━━━━━━━━━━━━━━\n\nYou have successfully received administrator rights.\n\n📌 Use /admin to access the control panel.",
-  "admin.panel": "🛡️ <b>Control Panel</b>\n━━━━━━━━━━━━━━━━━━━━\nWelcome, {name}!\n\nSelect a section to manage:",
+  "admin.panel": "🛡️ <b>Control Panel</b>\n━━━━━━━━━━━━━━━━━━━━\nWelcome, {name}!\nUptime: {uptime}\n\nSelect a section to manage:",
   "admin.expired": "⚠️ <b>Session expired</b>\n\nLog in again via /admin",
   "admin.exited": "👋 <b>Panel exited</b>\n━━━━━━━━━━━━━━━━━━━━\n\nYou have successfully exited the control panel.",
   "admin.channels": "📺 <b>Channel Management</b>\n━━━━━━━━━━━━━━━━━━━━\nTotal tracked: <b>{count}</b> channel(s)\n\n",

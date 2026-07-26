@@ -30,7 +30,8 @@ import { getKickChannelByUsername } from "../kickAPI/users";
 import { Channel, UserFollow } from "../database/schema";
 import { t, Locale } from "../i18n";
 import { getUserLocale } from "../utils/locale";
-import { formatDateUTC } from "../utils/time";
+import { STARTUP_TIME } from "../config";
+import { formatDateUTC, formatUptime } from "../utils/time";
 
 const log = logger.getSubLogger({ name: "bot:router" });
 
@@ -297,7 +298,7 @@ router.command("admin", async (ctx) => {
   }
   log.warn(`${ctx.from?.id!} enter admin system`)
   const firstName = ctx.from?.first_name || "Admin"
-  const message = t("admin.panel", locale).replace("{name}", firstName)
+  const message = t("admin.panel", locale).replace("{name}", firstName).replace("{uptime}", formatUptime(STARTUP_TIME))
   ctx.reply(message, {reply_markup: buildAdminKeyboard(locale), parse_mode: "HTML"})
 })
 

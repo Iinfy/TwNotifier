@@ -33,6 +33,7 @@ export const PGBACKWEB_URL: string = String(process.env.PGBACKWEB_URL)
 
 export const DEFAULT_LANGUAGE: string = process.env.DEFAULT_LANGUAGE || "ru"
 
+export const STARTUP_TIME = Date.now();
 
 export async function setAppToken(appToken: string): Promise<void> {
   APP_TOKEN = appToken;

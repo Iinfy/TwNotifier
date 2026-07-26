@@ -30,3 +30,11 @@ export function formatDateForAdmin(isoString: string, utcOffset: number): string
 export function formatDateUTC(isoString: string): string {
   return formatTimeUTC(isoString).slice(0, 10)
 }
+
+export function formatUptime(startupTime: number): string {
+  const diff = Date.now() - startupTime;
+  const minutes = Math.floor(diff / 60000) % 60;
+  const hours = Math.floor(diff / 3600000) % 24;
+  const days = Math.floor(diff / 86400000);
+  return `${days}d ${hours}h ${minutes}m`;
+}

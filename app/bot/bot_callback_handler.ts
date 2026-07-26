@@ -64,8 +64,8 @@ import { deleteKickSubscription, getKickSubscriptions, subscribeToKickChannelOnl
 import { sendBroadcastMessage } from "./bot_sender";
 import { t, Locale } from "../i18n";
 import { getUserLocale } from "../utils/locale";
-import { TWITCH_EVENT_TRANSPORT } from "../config";
-import { formatDateForAdmin, formatDateUTC, formatTimeForAdmin } from "../utils/time";
+import { TWITCH_EVENT_TRANSPORT, STARTUP_TIME } from "../config";
+import { formatDateForAdmin, formatDateUTC, formatTimeForAdmin, formatUptime } from "../utils/time";
 
 export const router = new Composer<MyContext>();
 
@@ -94,7 +94,7 @@ router.callbackQuery("adminCMD", async (ctx) => {
   ctx.session.adminLogin = { signed_in: true };
   log.warn(`${ctx.from?.id} enter admin system`);
   const firstName = ctx.from?.first_name || "Admin";
-  let message = t("admin.panel", locale).replace("{name}", firstName);
+  let message = t("admin.panel", locale).replace("{name}", firstName).replace("{uptime}", formatUptime(STARTUP_TIME));
   await ctx.editMessageText(message, { reply_markup: buildAdminKeyboard(locale), parse_mode: "HTML" });
 });
 
@@ -634,7 +634,7 @@ router.callbackQuery(/^admin_key_revoke_confirm_(\d+)$/, async (ctx) => {
 router.callbackQuery("admin_back", async (ctx) => {
   if (ctx.session.adminLogin) {
     const locale = await getUserLocale(ctx.from.id);
-    let message = t("admin.panel", locale).replace("{name}", ctx.from.first_name)
+    let message = t("admin.panel", locale).replace("{name}", ctx.from.first_name).replace("{uptime}", formatUptime(STARTUP_TIME))
     ctx.editMessageText(message, { reply_markup: buildAdminKeyboard(locale), parse_mode: "HTML" })
   } else {
     await ctx.editMessageText(t("admin.expired", "ru"), { parse_mode: "HTML" });
