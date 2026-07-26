@@ -439,45 +439,45 @@ router.callbackQuery("cancel_remove", async (ctx) => {
 
 //admin routes
 router.callbackQuery("admin_exit", async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const locale = await getUserLocale(ctx.from.id);
     ctx.session.adminLogin = undefined
     ctx.editMessageText(t("admin.exited", locale), {parse_mode: "HTML", reply_markup: await buildHomeKeyboard(ctx.from.id, locale)})
     log.warn(`${ctx.from.id} exit admin system`)
   } else {
-    await ctx.editMessageText(t("admin.expired", "ru"), { parse_mode: "HTML" });
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
 })
 
 router.callbackQuery("admin_settings", async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const locale = await getUserLocale(ctx.from.id);
     const message = t("admin.settings.title", locale)
     await ctx.editMessageText(message, {
       reply_markup: await buildAdminSettingsKeyboard(ctx.from.id, locale),
       parse_mode: "HTML",
     });
   } else {
-    await ctx.editMessageText(t("admin.expired", "ru"), { parse_mode: "HTML" });
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
 })
 
 router.callbackQuery("admin_tz_change", async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const locale = await getUserLocale(ctx.from.id);
     const message = t("admin.settings.timezone_select", locale)
     await ctx.editMessageText(message, {
       reply_markup: buildTimezoneKeyboard(locale),
       parse_mode: "HTML",
     });
   } else {
-    await ctx.editMessageText(t("admin.expired", "ru"), { parse_mode: "HTML" });
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
 })
 
 router.callbackQuery(/^admin_tz_(-?\d+)$/, async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const locale = await getUserLocale(ctx.from.id);
     const offset = Number(ctx.match[1])
     if (offset < -12 || offset > 14) {
       return ctx.answerCallbackQuery({ text: "Invalid offset", show_alert: true })
@@ -490,13 +490,13 @@ router.callbackQuery(/^admin_tz_(-?\d+)$/, async (ctx) => {
       parse_mode: "HTML",
     })
   } else {
-    await ctx.editMessageText(t("admin.expired", "ru"), { parse_mode: "HTML" });
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
 })
 
 router.callbackQuery("admin_channels", async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const locale = await getUserLocale(ctx.from.id);
     const channels = await getChannels()
     let message = t("admin.channels", locale).replace("{count}", channels.length.toString())
     for (const channel of channels) {
@@ -506,13 +506,13 @@ router.callbackQuery("admin_channels", async (ctx) => {
     }
     ctx.editMessageText(message, {reply_markup: buildAdminBackKeyboard(locale), parse_mode: "HTML"})
   } else {
-    await ctx.editMessageText(t("admin.expired", "ru"), { parse_mode: "HTML" });
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
 })
 
 router.callbackQuery("admin_users", async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const locale = await getUserLocale(ctx.from.id);
     const adminSettings = await getAdminSettings(ctx.from.id)
     const tzOffset = adminSettings?.utc_offset ?? 0
     const users = await getUsers()
@@ -524,13 +524,13 @@ router.callbackQuery("admin_users", async (ctx) => {
     }
     ctx.editMessageText(message, {reply_markup: buildAdminBackKeyboard(locale), parse_mode: "HTML"})
   } else {
-    await ctx.editMessageText(t("admin.expired", "ru"), { parse_mode: "HTML" });
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
 })
 
 router.callbackQuery("admin_admins", async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const locale = await getUserLocale(ctx.from.id);
     const adminSettings = await getAdminSettings(ctx.from.id)
     const tzOffset = adminSettings?.utc_offset ?? 0
     const users = await getAdmins()
@@ -542,22 +542,22 @@ router.callbackQuery("admin_admins", async (ctx) => {
     }
     ctx.editMessageText(message, {reply_markup: buildAdminBackKeyboard(locale), parse_mode: "HTML"})
   } else {
-    await ctx.editMessageText(t("admin.expired", "ru"), { parse_mode: "HTML" });
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
 })
 
 router.callbackQuery("admin_add", async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const locale = await getUserLocale(ctx.from.id);
     ctx.editMessageText(t("admin.key_create", locale), {parse_mode: "HTML", reply_markup: buildAdminAddConfirmKeyboard(locale)})
   } else {
-    await ctx.editMessageText(t("admin.expired", "ru"), { parse_mode: "HTML" });
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
 })
 
 router.callbackQuery("admin_add_confirm", async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const locale = await getUserLocale(ctx.from.id);
     const key = randomBytes(32).toString("base64url")
     const adminKey = await addAdminKey(ctx.from.id, key)
     if (!adminKey) {
@@ -566,13 +566,13 @@ router.callbackQuery("admin_add_confirm", async (ctx) => {
     let message = t("admin.key_created", locale).replace("{key}", `<tg-spoiler>${adminKey.key}</tg-spoiler>`)
     ctx.editMessageText(message, {parse_mode: "HTML", reply_markup: buildAdminBackKeyboard(locale)})
   } else {
-    await ctx.editMessageText(t("admin.expired", "ru"), { parse_mode: "HTML" });
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
 })
 
 router.callbackQuery("admin_keys", async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const locale = await getUserLocale(ctx.from.id);
     const adminSettings = await getAdminSettings(ctx.from.id)
     const tzOffset = adminSettings?.utc_offset ?? 0
     const keys = await getAllAdminKeys()
@@ -612,13 +612,13 @@ router.callbackQuery("admin_keys", async (ctx) => {
 
     ctx.editMessageText(message, { reply_markup: kb, parse_mode: "HTML" })
   } else {
-    await ctx.editMessageText(t("admin.expired", "ru"), { parse_mode: "HTML" });
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
 })
 
 router.callbackQuery(/^admin_key_revoke_confirm_(\d+)$/, async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const locale = await getUserLocale(ctx.from.id);
     const keyId = Number(ctx.match[1])
     const revoked = await revokeAdminKey(keyId)
     if (!revoked) {
@@ -627,23 +627,23 @@ router.callbackQuery(/^admin_key_revoke_confirm_(\d+)$/, async (ctx) => {
     let message = t("admin.key_revoked", locale).replace("{key}", revoked.key.slice(0, 12) + "...")
     ctx.editMessageText(message, { reply_markup: buildAdminBackKeyboard(locale), parse_mode: "HTML" })
   } else {
-    await ctx.editMessageText(t("admin.expired", "ru"), { parse_mode: "HTML" });
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
 })
 
 router.callbackQuery("admin_back", async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const locale = await getUserLocale(ctx.from.id);
     let message = t("admin.panel", locale).replace("{name}", ctx.from.first_name).replace("{uptime}", formatUptime(STARTUP_TIME))
     ctx.editMessageText(message, { reply_markup: buildAdminKeyboard(locale), parse_mode: "HTML" })
   } else {
-    await ctx.editMessageText(t("admin.expired", "ru"), { parse_mode: "HTML" });
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
 })
 
 router.callbackQuery("admin_eventsub", async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const locale = await getUserLocale(ctx.from.id);
     const subs = await getEventSubList()
     log.info(`${ctx.from.id} opened EventSub control`, { total: subs.length })
     let message = t("admin.eventsub_header", locale)
@@ -664,13 +664,13 @@ router.callbackQuery("admin_eventsub", async (ctx) => {
     }
     ctx.editMessageText(message, { reply_markup: buildEventsubControlKeyboard(locale), parse_mode: "HTML" })
   } else {
-    await ctx.editMessageText(t("admin.expired", "ru"), { parse_mode: "HTML" });
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
 })
 
 router.callbackQuery("admin_eventsubreload_confirm", async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const locale = await getUserLocale(ctx.from.id);
     ctx.editMessageText(t("admin.eventsub_restarting", locale), {parse_mode: "HTML"})
     const subs = await getEventSubList()
     await deleteSubs(subs)
@@ -684,13 +684,13 @@ router.callbackQuery("admin_eventsubreload_confirm", async (ctx) => {
       .replace("{after}", newSubs.length.toString())
     ctx.editMessageText(successMessage, { reply_markup: buildEventsubResultKeyboard(locale), parse_mode: "HTML" })
   } else {
-    await ctx.editMessageText(t("admin.expired", "ru"), { parse_mode: "HTML" });
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
 })
 
 router.callbackQuery("admin_eventsub_disconnect", async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const locale = await getUserLocale(ctx.from.id);
     ctx.editMessageText(t("admin.eventsub_disconnecting", locale), {parse_mode: "HTML"})
     const subs = await getEventSubList()
     await deleteSubs(subs)
@@ -698,13 +698,13 @@ router.callbackQuery("admin_eventsub_disconnect", async (ctx) => {
     let successMessage = t("admin.eventsub_disconnected", locale).replace("{count}", subs.length.toString())
     ctx.editMessageText(successMessage, { reply_markup: buildEventsubResultKeyboard(locale), parse_mode: "HTML" })
   } else {
-    await ctx.editMessageText(t("admin.expired", "ru"), { parse_mode: "HTML" });
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
 })
 
 router.callbackQuery("admin_eventsub_cleanup", async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const locale = await getUserLocale(ctx.from.id);
     ctx.editMessageText(t("admin.eventsub_cleanup_searching", locale), {parse_mode: "HTML"})
     const subs = await getEventSubList()
     const orphaned = []
@@ -726,13 +726,13 @@ router.callbackQuery("admin_eventsub_cleanup", async (ctx) => {
       .replace("{remaining}", (subs.length - orphaned.length).toString())
     ctx.editMessageText(successMessage, { reply_markup: buildEventsubResultKeyboard(locale), parse_mode: "HTML" })
   } else {
-    await ctx.editMessageText(t("admin.expired", "ru"), { parse_mode: "HTML" });
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
 })
 
 router.callbackQuery("admin_webhook", async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const locale = await getUserLocale(ctx.from.id);
     const adminSettings = await getAdminSettings(ctx.from.id)
     const tzOffset = adminSettings?.utc_offset ?? 0
     const subs = await getKickSubscriptions()
@@ -749,13 +749,13 @@ router.callbackQuery("admin_webhook", async (ctx) => {
     }
     ctx.editMessageText(message, { reply_markup: buildWebhookControlKeyboard(locale), parse_mode: "HTML" })
   } else {
-    await ctx.editMessageText(t("admin.expired", "ru"), { parse_mode: "HTML" });
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
 })
 
 router.callbackQuery("admin_webhookreload_confirm", async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const locale = await getUserLocale(ctx.from.id);
     ctx.editMessageText(t("admin.webhook_restarting", locale), {parse_mode: "HTML"})
     const subs = await getKickSubscriptions()
     const dbSubs = await getChannelsWithFollowersByPlatform("kick")
@@ -773,13 +773,13 @@ router.callbackQuery("admin_webhookreload_confirm", async (ctx) => {
       .replace("{after}", newSubs.length.toString())
     ctx.editMessageText(successMessage, {reply_markup: buildWebhookResultKeyboard(locale), parse_mode: "HTML"})
   } else {
-    await ctx.editMessageText(t("admin.expired", "ru"), { parse_mode: "HTML" });
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
 })
 
 router.callbackQuery("admin_webhook_disconnect", async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const locale = await getUserLocale(ctx.from.id);
     ctx.editMessageText(t("admin.webhook_disconnecting", locale), {parse_mode: "HTML"})
     const subs = await getKickSubscriptions()
     for (const sub of subs) {
@@ -789,13 +789,13 @@ router.callbackQuery("admin_webhook_disconnect", async (ctx) => {
     let successMessage = t("admin.webhook_disconnected", locale).replace("{count}", subs.length.toString())
     ctx.editMessageText(successMessage, { reply_markup: buildWebhookResultKeyboard(locale), parse_mode: "HTML" })
   } else {
-    await ctx.editMessageText(t("admin.expired", "ru"), { parse_mode: "HTML" });
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
 })
 
 router.callbackQuery("admin_webhook_cleanup", async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const locale = await getUserLocale(ctx.from.id);
     ctx.editMessageText(t("admin.webhook_cleanup_searching", locale), {parse_mode: "HTML"})
     const subs = await getKickSubscriptions()
     const orphaned = []
@@ -817,13 +817,13 @@ router.callbackQuery("admin_webhook_cleanup", async (ctx) => {
       .replace("{remaining}", (subs.length - orphaned.length).toString())
     ctx.editMessageText(successMessage, { reply_markup: buildWebhookResultKeyboard(locale), parse_mode: "HTML" })
   } else {
-    await ctx.editMessageText(t("admin.expired", "ru"), { parse_mode: "HTML" });
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
 })
 
 router.callbackQuery("admin_follows", async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const locale = await getUserLocale(ctx.from.id);
     const adminSettings = await getAdminSettings(ctx.from.id)
     const tzOffset = adminSettings?.utc_offset ?? 0
     const follows = await getAllFollowsWithDetails()
@@ -855,13 +855,13 @@ router.callbackQuery("admin_follows", async (ctx) => {
     }
     ctx.editMessageText(message, { reply_markup: buildAdminBackKeyboard(locale), parse_mode: "HTML" })
   } else {
-    await ctx.editMessageText(t("admin.expired", "ru"), { parse_mode: "HTML" });
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
 })
 
 router.callbackQuery("admin_logs", async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const locale = await getUserLocale(ctx.from.id);
     const adminSettings = await getAdminSettings(ctx.from.id)
     const tzOffset = adminSettings?.utc_offset ?? 0
     const logs = await getRecentStreamLogs(10)
@@ -880,27 +880,27 @@ router.callbackQuery("admin_logs", async (ctx) => {
     }
     ctx.editMessageText(message, { reply_markup: buildAdminBackKeyboard(locale), parse_mode: "HTML" })
   } else {
-    await ctx.editMessageText(t("admin.expired", "ru"), { parse_mode: "HTML" });
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
 })
 
 router.callbackQuery("admin_restart", async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const locale = await getUserLocale(ctx.from.id);
     ctx.editMessageText(t("admin.restart_confirm", locale), { reply_markup: buildRestartConfirmKeyboard(locale), parse_mode: "HTML" })
   } else {
-    await ctx.editMessageText(t("admin.expired", "ru"), { parse_mode: "HTML" });
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
 })
 
 router.callbackQuery("admin_restart_confirm", async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const locale = await getUserLocale(ctx.from.id);
     log.warn(`${ctx.from.id} initiated bot restart`)
     await ctx.editMessageText(t("admin.restarting", locale), { parse_mode: "HTML" })
     process.exit(0)
   } else {
-    await ctx.editMessageText(t("admin.expired", "ru"), { parse_mode: "HTML" });
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
 })
 
@@ -1065,13 +1065,13 @@ router.callbackQuery("remove_platform_back", async (ctx) => {
 });
 
 router.callbackQuery("admin_broadcast", async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const locale = await getUserLocale(ctx.from.id);
     ctx.session.broadcastPending = true;
     log.warn(`${ctx.from.id} initiated broadcast`);
     await ctx.editMessageText(t("admin.broadcast_title", locale), { reply_markup: buildBroadcastCancelKeyboard(locale), parse_mode: "Markdown" });
   } else {
-    await ctx.editMessageText(t("admin.expired", "ru"), { parse_mode: "HTML" });
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
 });
 
