@@ -17,6 +17,8 @@ import { getAppToken } from "./auth";
 
 const log = logger.getSubLogger({ name: "twitchAPI:subscriptions" });
 
+export type ProgressCallback = (progress: { current: number; total: number; phase: string }) => void;
+
 function getTransport() {
   if (TWITCH_EVENT_TRANSPORT === "webhook") {
     return {
@@ -104,10 +106,13 @@ export async function subscribeToChannelOnline(broadcasterId: number, broadcaste
   }
 }
 
-export async function subscribeAllStreamsOnline() {
+export async function subscribeAllStreamsOnline(onProgress?: ProgressCallback) {
   const channels = await getChannelsWithFollowersByPlatform("twitch");
-  for (const channel of channels) {
-    await subscribeToChannelOnline(channel.channel_id, channel.channel_name);
+  for (let i = 0; i < channels.length; i++) {
+    await subscribeToChannelOnline(channels[i].channel_id, channels[i].channel_name);
+    if (onProgress) {
+      onProgress({ current: i + 1, total: channels.length, phase: "Subscribing online" });
+    }
   }
   log.info("subscribed to all channels online", { count: channels.length });
 }
@@ -184,10 +189,13 @@ export async function subscribeToChannelOffline(broadcasterId: number, broadcast
   }
 }
 
-export async function subscribeAllStreamsOffline() {
+export async function subscribeAllStreamsOffline(onProgress?: ProgressCallback) {
   const channels = await getChannelsWithFollowersByPlatform("twitch");
-  for (const channel of channels) {
-    await subscribeToChannelOffline(channel.channel_id, channel.channel_name);
+  for (let i = 0; i < channels.length; i++) {
+    await subscribeToChannelOffline(channels[i].channel_id, channels[i].channel_name);
+    if (onProgress) {
+      onProgress({ current: i + 1, total: channels.length, phase: "Subscribing offline" });
+    }
   }
   log.info("subscribed to all channels offline", { count: channels.length });
 }
@@ -281,9 +289,12 @@ async function deleteSub(sub: TwitchEventSubSubscription, retries = 3) {
   }
 }
 
-export async function deleteSubs(subs: TwitchEventSubSubscription[]) {
+export async function deleteSubs(subs: TwitchEventSubSubscription[], onProgress?: ProgressCallback) {
   console.log("get subs: " + subs.length)
-  for (const sub of subs) {
-    await deleteSub(sub)
+  for (let i = 0; i < subs.length; i++) {
+    await deleteSub(subs[i])
+    if (onProgress) {
+      onProgress({ current: i + 1, total: subs.length, phase: "Deleting subscriptions" });
+    }
   }
 }

@@ -60,12 +60,13 @@ import { MyContext } from "./bot";
 import { toggleLinkPreviewStateByUserId, toggleOfflineNotificationStateByUserId, toggleOnlineNotificationStateByUserId } from "../utils/settings";
 import { randomBytes } from "node:crypto";
 import { sleep } from "bun";
-import { deleteKickSubscription, getKickSubscriptions, subscribeToKickChannelOnline } from "../kickAPI/subscription";
+import { deleteKickSubscription, deleteKickSubscriptions, getKickSubscriptions, subscribeToKickChannelOnline, subscribeToKickChannelsOnline } from "../kickAPI/subscription";
 import { sendBroadcastMessage } from "./bot_sender";
 import { t, Locale } from "../i18n";
 import { getUserLocale } from "../utils/locale";
 import { TWITCH_EVENT_TRANSPORT, STARTUP_TIME } from "../config";
 import { formatDateForAdmin, formatDateUTC, formatTimeForAdmin, formatUptime } from "../utils/time";
+import { renderProgressBar } from "../utils/progress";
 
 export const router = new Composer<MyContext>();
 
@@ -671,32 +672,71 @@ router.callbackQuery("admin_eventsub", async (ctx) => {
 router.callbackQuery("admin_eventsubreload_confirm", async (ctx) => {
   const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    ctx.editMessageText(t("admin.eventsub_restarting", locale), {parse_mode: "HTML"})
-    const subs = await getEventSubList()
-    await deleteSubs(subs)
-    await sleep(2500)
-    await subscribeAllStreamsOnline()
-    await subscribeAllStreamsOffline()
-    const newSubs = await getEventSubList()
-    log.warn(`${ctx.from.id} reloaded EventSub`, { before: subs.length, after: newSubs.length })
+    await ctx.editMessageText(t("admin.eventsub_restarting", locale), { parse_mode: "HTML" });
+    const subs = await getEventSubList();
+
+    const completedPhases: string[] = [];
+    let lastEdit = 0;
+    const onProgress = async ({ current, total, phase }: { current: number; total: number; phase: string }) => {
+      const now = Date.now();
+      if (now - lastEdit < 1500 && current < total) return;
+      lastEdit = now;
+      const lines = completedPhases.map(p => `${p} ✓`).join("\n");
+      const currentLine = `${phase}\n${renderProgressBar(current, total)}`;
+      const message = lines ? `${lines}\n\n${currentLine}` : currentLine;
+      try {
+        await ctx.editMessageText(message, { parse_mode: "HTML" });
+      } catch {}
+      if (current === total) {
+        completedPhases.push(`${phase} ${current}/${total}`);
+      }
+    };
+
+    await deleteSubs(subs, onProgress);
+    await sleep(2500);
+    await subscribeAllStreamsOnline(onProgress);
+    await subscribeAllStreamsOffline(onProgress);
+    const newSubs = await getEventSubList();
+    log.warn(`${ctx.from.id} reloaded EventSub`, { before: subs.length, after: newSubs.length });
+    const summary = completedPhases.map(p => `${p} ✓`).join("\n");
     let successMessage = t("admin.eventsub_reloaded", locale)
       .replace("{before}", subs.length.toString())
-      .replace("{after}", newSubs.length.toString())
-    ctx.editMessageText(successMessage, { reply_markup: buildEventsubResultKeyboard(locale), parse_mode: "HTML" })
+      .replace("{after}", newSubs.length.toString());
+    successMessage = `${summary}\n\n${successMessage}`;
+    await ctx.editMessageText(successMessage, { reply_markup: buildEventsubResultKeyboard(locale), parse_mode: "HTML" });
   } else {
     await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
-})
+});
 
 router.callbackQuery("admin_eventsub_disconnect", async (ctx) => {
   const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    ctx.editMessageText(t("admin.eventsub_disconnecting", locale), {parse_mode: "HTML"})
-    const subs = await getEventSubList()
-    await deleteSubs(subs)
-    log.warn(`${ctx.from.id} disconnected EventSub`, { deleted: subs.length })
-    let successMessage = t("admin.eventsub_disconnected", locale).replace("{count}", subs.length.toString())
-    ctx.editMessageText(successMessage, { reply_markup: buildEventsubResultKeyboard(locale), parse_mode: "HTML" })
+    await ctx.editMessageText(t("admin.eventsub_disconnecting", locale), { parse_mode: "HTML" });
+    const subs = await getEventSubList();
+
+    const completedPhases: string[] = [];
+    let lastEdit = 0;
+    await deleteSubs(subs, async ({ current, total, phase }) => {
+      const now = Date.now();
+      if (now - lastEdit < 1500 && current < total) return;
+      lastEdit = now;
+      const lines = completedPhases.map(p => `${p} ✓`).join("\n");
+      const currentLine = `${phase}\n${renderProgressBar(current, total)}`;
+      const message = lines ? `${lines}\n\n${currentLine}` : currentLine;
+      try {
+        await ctx.editMessageText(message, { parse_mode: "HTML" });
+      } catch {}
+      if (current === total) {
+        completedPhases.push(`${phase} ${current}/${total}`);
+      }
+    });
+
+    log.warn(`${ctx.from.id} disconnected EventSub`, { deleted: subs.length });
+    const summary = completedPhases.map(p => `${p} ✓`).join("\n");
+    let successMessage = t("admin.eventsub_disconnected", locale).replace("{count}", subs.length.toString());
+    successMessage = `${summary}\n\n${successMessage}`;
+    await ctx.editMessageText(successMessage, { reply_markup: buildEventsubResultKeyboard(locale), parse_mode: "HTML" });
   } else {
     await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
@@ -705,26 +745,45 @@ router.callbackQuery("admin_eventsub_disconnect", async (ctx) => {
 router.callbackQuery("admin_eventsub_cleanup", async (ctx) => {
   const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    ctx.editMessageText(t("admin.eventsub_cleanup_searching", locale), {parse_mode: "HTML"})
-    const subs = await getEventSubList()
-    const orphaned = []
+    await ctx.editMessageText(t("admin.eventsub_cleanup_searching", locale), { parse_mode: "HTML" });
+    const subs = await getEventSubList();
+    const orphaned = [];
     for (const sub of subs) {
-      const channelId = sub.condition.broadcaster_user_id
-      if (!channelId) continue
-      const follows = await getChannelFollowersByChannelIdAndPlatform(Number(channelId), "twitch")
-      if (follows.length === 0) orphaned.push(sub)
+      const channelId = sub.condition.broadcaster_user_id;
+      if (!channelId) continue;
+      const follows = await getChannelFollowersByChannelIdAndPlatform(Number(channelId), "twitch");
+      if (follows.length === 0) orphaned.push(sub);
     }
     if (orphaned.length === 0) {
-      log.info(`${ctx.from.id} EventSub cleanup - nothing to remove`, { total: subs.length })
-      return ctx.editMessageText(t("admin.eventsub_no_orphans", locale).replace("{count}", subs.length.toString()), { reply_markup: buildEventsubControlKeyboard(locale), parse_mode: "HTML" })
+      log.info(`${ctx.from.id} EventSub cleanup - nothing to remove`, { total: subs.length });
+      return ctx.editMessageText(t("admin.eventsub_no_orphans", locale).replace("{count}", subs.length.toString()), { reply_markup: buildEventsubControlKeyboard(locale), parse_mode: "HTML" });
     }
-    await deleteSubs(orphaned)
-    log.warn(`${ctx.from.id} EventSub cleanup`, { total: subs.length, removed: orphaned.length, remaining: subs.length - orphaned.length })
+
+    const completedPhases: string[] = [];
+    let lastEdit = 0;
+    await deleteSubs(orphaned, async ({ current, total, phase }) => {
+      const now = Date.now();
+      if (now - lastEdit < 1500 && current < total) return;
+      lastEdit = now;
+      const lines = completedPhases.map(p => `${p} ✓`).join("\n");
+      const currentLine = `${phase}\n${renderProgressBar(current, total)}`;
+      const message = lines ? `${lines}\n\n${currentLine}` : currentLine;
+      try {
+        await ctx.editMessageText(message, { parse_mode: "HTML" });
+      } catch {}
+      if (current === total) {
+        completedPhases.push(`${phase} ${current}/${total}`);
+      }
+    });
+
+    log.warn(`${ctx.from.id} EventSub cleanup`, { total: subs.length, removed: orphaned.length, remaining: subs.length - orphaned.length });
+    const summary = completedPhases.map(p => `${p} ✓`).join("\n");
     let successMessage = t("admin.eventsub_cleanup_done", locale)
       .replace("{total}", subs.length.toString())
       .replace("{removed}", orphaned.length.toString())
-      .replace("{remaining}", (subs.length - orphaned.length).toString())
-    ctx.editMessageText(successMessage, { reply_markup: buildEventsubResultKeyboard(locale), parse_mode: "HTML" })
+      .replace("{remaining}", (subs.length - orphaned.length).toString());
+    successMessage = `${summary}\n\n${successMessage}`;
+    await ctx.editMessageText(successMessage, { reply_markup: buildEventsubResultKeyboard(locale), parse_mode: "HTML" });
   } else {
     await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
@@ -756,22 +815,38 @@ router.callbackQuery("admin_webhook", async (ctx) => {
 router.callbackQuery("admin_webhookreload_confirm", async (ctx) => {
   const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    ctx.editMessageText(t("admin.webhook_restarting", locale), {parse_mode: "HTML"})
-    const subs = await getKickSubscriptions()
-    const dbSubs = await getChannelsWithFollowersByPlatform("kick")
-    for (const sub of subs) {
-      await deleteKickSubscription(sub)
-    }
-    await sleep(2500)
-    for (const sub of dbSubs) {
-      await subscribeToKickChannelOnline(sub.channel_id!)
-    }
-    const newSubs = await getKickSubscriptions()
-    log.warn(`${ctx.from.id} reloaded Webhooks`, { before: subs.length, after: newSubs.length })
+    await ctx.editMessageText(t("admin.webhook_restarting", locale), { parse_mode: "HTML" });
+    const subs = await getKickSubscriptions();
+    const dbSubs = await getChannelsWithFollowersByPlatform("kick");
+
+    const completedPhases: string[] = [];
+    let lastEdit = 0;
+    const onProgress = async ({ current, total, phase }: { current: number; total: number; phase: string }) => {
+      const now = Date.now();
+      if (now - lastEdit < 1500 && current < total) return;
+      lastEdit = now;
+      const lines = completedPhases.map(p => `${p} ✓`).join("\n");
+      const currentLine = `${phase}\n${renderProgressBar(current, total)}`;
+      const message = lines ? `${lines}\n\n${currentLine}` : currentLine;
+      try {
+        await ctx.editMessageText(message, { parse_mode: "HTML" });
+      } catch {}
+      if (current === total) {
+        completedPhases.push(`${phase} ${current}/${total}`);
+      }
+    };
+
+    await deleteKickSubscriptions(subs, onProgress);
+    await sleep(2500);
+    await subscribeToKickChannelsOnline(dbSubs.map(s => s.channel_id!), onProgress);
+    const newSubs = await getKickSubscriptions();
+    log.warn(`${ctx.from.id} reloaded Webhooks`, { before: subs.length, after: newSubs.length });
+    const summary = completedPhases.map(p => `${p} ✓`).join("\n");
     let successMessage = t("admin.webhook_reloaded", locale)
       .replace("{before}", subs.length.toString())
-      .replace("{after}", newSubs.length.toString())
-    ctx.editMessageText(successMessage, {reply_markup: buildWebhookResultKeyboard(locale), parse_mode: "HTML"})
+      .replace("{after}", newSubs.length.toString());
+    successMessage = `${summary}\n\n${successMessage}`;
+    await ctx.editMessageText(successMessage, { reply_markup: buildWebhookResultKeyboard(locale), parse_mode: "HTML" });
   } else {
     await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
@@ -780,14 +855,31 @@ router.callbackQuery("admin_webhookreload_confirm", async (ctx) => {
 router.callbackQuery("admin_webhook_disconnect", async (ctx) => {
   const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    ctx.editMessageText(t("admin.webhook_disconnecting", locale), {parse_mode: "HTML"})
-    const subs = await getKickSubscriptions()
-    for (const sub of subs) {
-      await deleteKickSubscription(sub)
-    }
-    log.warn(`${ctx.from.id} disconnected Webhooks`, { deleted: subs.length })
-    let successMessage = t("admin.webhook_disconnected", locale).replace("{count}", subs.length.toString())
-    ctx.editMessageText(successMessage, { reply_markup: buildWebhookResultKeyboard(locale), parse_mode: "HTML" })
+    await ctx.editMessageText(t("admin.webhook_disconnecting", locale), { parse_mode: "HTML" });
+    const subs = await getKickSubscriptions();
+
+    const completedPhases: string[] = [];
+    let lastEdit = 0;
+    await deleteKickSubscriptions(subs, async ({ current, total, phase }) => {
+      const now = Date.now();
+      if (now - lastEdit < 1500 && current < total) return;
+      lastEdit = now;
+      const lines = completedPhases.map(p => `${p} ✓`).join("\n");
+      const currentLine = `${phase}\n${renderProgressBar(current, total)}`;
+      const message = lines ? `${lines}\n\n${currentLine}` : currentLine;
+      try {
+        await ctx.editMessageText(message, { parse_mode: "HTML" });
+      } catch {}
+      if (current === total) {
+        completedPhases.push(`${phase} ${current}/${total}`);
+      }
+    });
+
+    log.warn(`${ctx.from.id} disconnected Webhooks`, { deleted: subs.length });
+    const summary = completedPhases.map(p => `${p} ✓`).join("\n");
+    let successMessage = t("admin.webhook_disconnected", locale).replace("{count}", subs.length.toString());
+    successMessage = `${summary}\n\n${successMessage}`;
+    await ctx.editMessageText(successMessage, { reply_markup: buildWebhookResultKeyboard(locale), parse_mode: "HTML" });
   } else {
     await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
@@ -796,26 +888,43 @@ router.callbackQuery("admin_webhook_disconnect", async (ctx) => {
 router.callbackQuery("admin_webhook_cleanup", async (ctx) => {
   const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    ctx.editMessageText(t("admin.webhook_cleanup_searching", locale), {parse_mode: "HTML"})
-    const subs = await getKickSubscriptions()
-    const orphaned = []
+    await ctx.editMessageText(t("admin.webhook_cleanup_searching", locale), { parse_mode: "HTML" });
+    const subs = await getKickSubscriptions();
+    const orphaned = [];
     for (const sub of subs) {
-      const follows = await getChannelFollowersByChannelIdAndPlatform(Number(sub.broadcaster_user_id), "kick")
-      if (follows.length === 0) orphaned.push(sub)
+      const follows = await getChannelFollowersByChannelIdAndPlatform(Number(sub.broadcaster_user_id), "kick");
+      if (follows.length === 0) orphaned.push(sub);
     }
     if (orphaned.length === 0) {
-      log.info(`${ctx.from.id} Webhook cleanup - nothing to remove`, { total: subs.length })
-      return ctx.editMessageText(t("admin.webhook_no_orphans", locale).replace("{count}", subs.length.toString()), { reply_markup: buildWebhookControlKeyboard(locale), parse_mode: "HTML" })
+      log.info(`${ctx.from.id} Webhook cleanup - nothing to remove`, { total: subs.length });
+      return ctx.editMessageText(t("admin.webhook_no_orphans", locale).replace("{count}", subs.length.toString()), { reply_markup: buildWebhookControlKeyboard(locale), parse_mode: "HTML" });
     }
-    for (const sub of orphaned) {
-      await deleteKickSubscription(sub)
-    }
-    log.warn(`${ctx.from.id} Webhook cleanup`, { total: subs.length, removed: orphaned.length, remaining: subs.length - orphaned.length })
+
+    const completedPhases: string[] = [];
+    let lastEdit = 0;
+    await deleteKickSubscriptions(orphaned, async ({ current, total, phase }) => {
+      const now = Date.now();
+      if (now - lastEdit < 1500 && current < total) return;
+      lastEdit = now;
+      const lines = completedPhases.map(p => `${p} ✓`).join("\n");
+      const currentLine = `${phase}\n${renderProgressBar(current, total)}`;
+      const message = lines ? `${lines}\n\n${currentLine}` : currentLine;
+      try {
+        await ctx.editMessageText(message, { parse_mode: "HTML" });
+      } catch {}
+      if (current === total) {
+        completedPhases.push(`${phase} ${current}/${total}`);
+      }
+    });
+
+    log.warn(`${ctx.from.id} Webhook cleanup`, { total: subs.length, removed: orphaned.length, remaining: subs.length - orphaned.length });
+    const summary = completedPhases.map(p => `${p} ✓`).join("\n");
     let successMessage = t("admin.webhook_cleanup_done", locale)
       .replace("{total}", subs.length.toString())
       .replace("{removed}", orphaned.length.toString())
-      .replace("{remaining}", (subs.length - orphaned.length).toString())
-    ctx.editMessageText(successMessage, { reply_markup: buildWebhookResultKeyboard(locale), parse_mode: "HTML" })
+      .replace("{remaining}", (subs.length - orphaned.length).toString());
+    successMessage = `${summary}\n\n${successMessage}`;
+    await ctx.editMessageText(successMessage, { reply_markup: buildWebhookResultKeyboard(locale), parse_mode: "HTML" });
   } else {
     await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
