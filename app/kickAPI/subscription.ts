@@ -97,6 +97,26 @@ export async function getKickSubscriptions(): Promise<KickSubscriptionData[]> {
   }
 }
 
+export type ProgressCallback = (progress: { current: number; total: number; phase: string }) => void;
+
+export async function deleteKickSubscriptions(subs: KickSubscriptionData[], onProgress?: ProgressCallback): Promise<void> {
+  for (let i = 0; i < subs.length; i++) {
+    await deleteKickSubscription(subs[i]);
+    if (onProgress) {
+      onProgress({ current: i + 1, total: subs.length, phase: "Deleting subscriptions" });
+    }
+  }
+}
+
+export async function subscribeToKickChannelsOnline(channelIds: number[], onProgress?: ProgressCallback): Promise<void> {
+  for (let i = 0; i < channelIds.length; i++) {
+    await subscribeToKickChannelOnline(channelIds[i]);
+    if (onProgress) {
+      onProgress({ current: i + 1, total: channelIds.length, phase: "Subscribing online" });
+    }
+  }
+}
+
 export async function deleteKickSubscription(sub: KickSubscriptionData): Promise<void>{
   const url = new URL(`${KICK_API}/public/v1/events/subscriptions`)
   url.searchParams.set("id", sub.id)
