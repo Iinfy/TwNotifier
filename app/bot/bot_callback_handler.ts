@@ -291,6 +291,7 @@ router.callbackQuery(/^manage_unfollow_(twitch|kick)_(\d+)$/, async (ctx) => {
   const channel = await getChannelByChannelId(channel_id);
   const channelName = channel?.channel_name || `ID:${channel_id}`;
   await removeFollowByUserIdChannelIdAndPlatfrom(ctx.from.id, channel_id, platform);
+  log.info("unfollowed via management", { userId: ctx.from.id, channel: channelName, channelId: channel_id, platform });
   await ctx.answerCallbackQuery({ text: t("follow.management.unfollow_success", locale).replace("{name}", channelName) });
   const follows = await getFollowsWithChannelByUserId(ctx.from.id);
   if (follows.length < 1) {
@@ -311,6 +312,7 @@ router.callbackQuery(/^manage_online_(twitch|kick)_(\d+)$/, async (ctx) => {
   const locale = await getUserLocale(ctx.from.id);
   const platform = ctx.match[1] as "kick" | "twitch";
   const channel_id = Number(ctx.match[2]);
+  log.info("checked online via management", { userId: ctx.from.id, channelId: channel_id, platform });
   const channel = await getChannelByChannelId(channel_id);
   const channelName = channel?.channel_name || `ID:${channel_id}`;
   const backKb = new InlineKeyboard().text(t("follow.management.back", locale), "manage_back");
