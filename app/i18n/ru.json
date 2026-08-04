@@ -21,6 +21,7 @@
   "buttons.back": "Назад",
   "buttons.add": "Добавить",
   "buttons.remove": "Удалить",
+  "buttons.manage": "📝 Управление",
   "buttons.online_channels": "🟢 Каналы онлайн",
   "buttons.confirm": "Продолжить",
   "buttons.cancel": "Отмена",
@@ -56,6 +57,7 @@
   "subscriptions.no_online": "🔴 <b>Онлайн каналов нет</b>\n\nСейчас ни один из ваших каналов не в эфире.",
   "subscriptions.online_header": "🟢 <b>Каналы онлайн</b>\n━━━━━━━━━━━━━━━━━━━━\n\n",
   "subscriptions.add_cancelled": "🚫 <b>Добавление отменено</b>\n\nКанал {name} не добавлен.",
+  "subscriptions.manage_title": "📝 <b>Управление подписками</b>\n━━━━━━━━━━━━━━━━━━━━\n\nВыберите канал:",
   "notifications.stream_online": "<a href=\"{url}\"><b>{name}</b></a> ведет прямую трансляцию.\n{title}\n<i>{game}</i>",
   "notifications.stream_online_kick": "<a href=\"{url}\"><b>{name}</b></a> ведет прямую трансляцию.\n{title}",
   "notifications.stream_offline": "*{name}* завершил прямую трансляцию.",
@@ -141,5 +143,14 @@
   "admin.settings.timezone": "⏰ Часовой пояс: <b>{offset}</b>",
   "admin.settings.timezone_select": "Выберите ваш UTC сдвиг:",
   "admin.settings.timezone_saved": "✅ Часовой пояс установлен: <b>{offset}</b>",
-  "admin.settings.back": "← Назад"
+  "admin.settings.back": "← Назад",
+  "follow.management.info": "📝 <b>Управление подпиской</b>\n━━━━━━━━━━━━━━━━━━━━\n\n📺 Канал: <b><a href=\"{url}\">{name}</a></b>\n🌐 Платформа: {platform}\n📅 Подписаны с: {date}\n\nВыберите действие:",
+  "follow.management.unfollow": "❌ Отписаться",
+  "follow.management.check_online": "🟢 Онлайн",
+  "follow.management.back": "← Назад",
+  "follow.management.not_found": "Подписка не найдена",
+  "follow.management.unfollow_success": "✅ Вы отписались от {name}",
+  "follow.management.online_no": "🔴 <b>{name}</b> сейчас офлайн",
+  "follow.management.online_yes": "🟢 <b><a href=\"{url}\">{name}</a></b> в эфире!\n\n👁 Зрителей: {viewers}\n🎮 {game}\n📝 {title}",
+  "follow.management.online_yes_kick": "🟢 <b><a href=\"{url}\">{name}</a></b> в эфире!\n\n👁 Зрителей: {viewers}\n📝 {title}"
 }
