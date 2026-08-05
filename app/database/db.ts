@@ -126,6 +126,21 @@ export async function getAllFollowsWithDetails() {
   return result;
 }
 
+export async function getFollowsWithChannelByUserId(user_id: number) {
+  const result = await db
+    .select({
+      user_id: users_follows.user_id,
+      channel_id: users_follows.channel_id,
+      channel_name: channels.channel_name,
+      platform: users_follows.platform,
+      created: users_follows.created,
+    })
+    .from(users_follows)
+    .innerJoin(channels, eq(users_follows.channel_id, channels.channel_id))
+    .where(eq(users_follows.user_id, user_id));
+  return result;
+}
+
 async function addUser(user_id: number, username: string, first_name: string): Promise<User> {
   try {
     const result = await db.transaction(async (tx) => {

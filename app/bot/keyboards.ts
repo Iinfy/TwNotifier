@@ -1,5 +1,5 @@
 import { InlineKeyboard } from "grammy";
-import { getAdminSettings, getSettingsStateByUserId, getUserByUserId } from "../database/db";
+import { getAdminSettings, getFollowsWithChannelByUserId, getSettingsStateByUserId, getUserByUserId } from "../database/db";
 import { ADMINER_URL, PGBACKWEB_URL } from "../config";
 import { t, Locale } from "../i18n";
 
@@ -178,7 +178,26 @@ export function buildMySubscriptionsKeyboard(locale: Locale = "ru"): InlineKeybo
     .text(t("buttons.add", locale), "mySubscriptionsAdd")
     .text(t("buttons.remove", locale), "mySubscriptionsRemove").row()
     .text(t("buttons.online_channels", locale), "mySubscriptionsOnline").row()
+    .text(t("buttons.manage", locale), "mySubscriptionsManage").row()
     .text(t("buttons.back", locale), "settingsBACK");
+}
+
+export async function buildMySubscriptionsManageKeyboard(user_id: number, locale: Locale = "ru"): Promise<InlineKeyboard> {
+  const follows = await getFollowsWithChannelByUserId(user_id);
+  const kb = new InlineKeyboard();
+  for (const follow of follows) {
+    const icon = follow.platform === "twitch" ? "🟣" : "🟢";
+    kb.text(`${icon} ${follow.channel_name}`, `manage_${follow.platform}_${follow.channel_id}`).row();
+  }
+  kb.text(t("buttons.back", locale), "mySubscriptionsCMD");
+  return kb;
+}
+
+export function buildFollowManagementKeyboard(platform: "kick" | "twitch", channel_id: number, locale: Locale = "ru"): InlineKeyboard {
+  return new InlineKeyboard()
+    .text(t("follow.management.unfollow", locale), `manage_unfollow_${platform}_${channel_id}`)
+    .text(t("follow.management.check_online", locale), `manage_online_${platform}_${channel_id}`).row()
+    .text(t("follow.management.back", locale), "manage_back");
 }
 
 export function buildMySubscriptionsAddBackKeyboard(locale: Locale = "ru"): InlineKeyboard {

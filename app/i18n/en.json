@@ -21,6 +21,7 @@
   "buttons.back": "Back",
   "buttons.add": "Add",
   "buttons.remove": "Remove",
+  "buttons.manage": "📝 Manage",
   "buttons.online_channels": "🟢 Online Channels",
   "buttons.confirm": "Continue",
   "buttons.cancel": "Cancel",
@@ -56,6 +57,7 @@
   "subscriptions.no_online": "🔴 <b>No channels online</b>\n\nNone of your channels are currently live.",
   "subscriptions.online_header": "🟢 <b>Online Channels</b>\n━━━━━━━━━━━━━━━━━━━━\n\n",
   "subscriptions.add_cancelled": "🚫 <b>Addition cancelled</b>\n\nChannel {name} was not added.",
+  "subscriptions.manage_title": "📝 <b>Manage Subscriptions</b>\n━━━━━━━━━━━━━━━━━━━━\n\nSelect a channel:",
   "notifications.stream_online": "<a href=\"{url}\"><b>{name}</b></a> is now live.\n{title}\n<i>{game}</i>",
   "notifications.stream_online_kick": "<a href=\"{url}\"><b>{name}</b></a> is now live.\n{title}",
   "notifications.stream_offline": "*{name}* has ended the stream.",
@@ -141,5 +143,14 @@
   "admin.settings.timezone": "⏰ Timezone: <b>{offset}</b>",
   "admin.settings.timezone_select": "Select your UTC offset:",
   "admin.settings.timezone_saved": "✅ Timezone set to <b>{offset}</b>",
-  "admin.settings.back": "← Back"
+  "admin.settings.back": "← Back",
+  "follow.management.info": "📝 <b>Manage Follow</b>\n━━━━━━━━━━━━━━━━━━━━\n\n📺 Channel: <b><a href=\"{url}\">{name}</a></b>\n🌐 Platform: {platform}\n📅 Following since: {date}\n\nSelect an action:",
+  "follow.management.unfollow": "❌ Unfollow",
+  "follow.management.check_online": "🟢 Online",
+  "follow.management.back": "← Back",
+  "follow.management.not_found": "Follow not found",
+  "follow.management.unfollow_success": "✅ Unfollowed {name}",
+  "follow.management.online_no": "🔴 <b>{name}</b> is currently offline",
+  "follow.management.online_yes": "🟢 <b><a href=\"{url}\">{name}</a></b> is live!\n\n👁 Viewers: {viewers}\n🎮 {game}\n📝 {title}",
+  "follow.management.online_yes_kick": "🟢 <b><a href=\"{url}\">{name}</a></b> is live!\n\n👁 Viewers: {viewers}\n📝 {title}"
 }

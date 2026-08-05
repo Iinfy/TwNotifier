@@ -16,6 +16,8 @@ import {
   buildBackHomeKeyboard,
   buildMySubscriptionsEmptyKeyboard,
   buildMySubscriptionsKeyboard,
+  buildMySubscriptionsManageKeyboard,
+  buildFollowManagementKeyboard,
   buildMySubscriptionsAddBackKeyboard,
   buildRestartConfirmKeyboard,
   buildPlatformSelectKeyboard,
@@ -40,6 +42,7 @@ import {
   getChannelsWithFollowersByPlatform,
   getFollowByUserIdChannelIdAndPlatform,
   getFollowsByUserIdAndPlatform,
+  getFollowsWithChannelByUserId,
   getRecentStreamLogs,
   getUsers,
   removeFollowByUserIdChannelIdAndPlatfrom,
@@ -238,6 +241,142 @@ router.callbackQuery("mySubscriptionsOnline", async (ctx) => {
   try {
     await ctx.editMessageText(text.trimEnd(), { parse_mode: "HTML", reply_markup: backKb, disable_web_page_preview: true });
   } catch {}
+});
+
+router.callbackQuery("mySubscriptionsManage", async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
+  ctx.session.awaitingAddInput = undefined;
+  ctx.session.awaitingRemoveInput = undefined;
+  const user_id = ctx.from?.id;
+  const follows = await getFollowsWithChannelByUserId(user_id!);
+  if (follows.length < 1) {
+    await ctx.editMessageText(t("subscriptions.empty", locale), {
+      parse_mode: "HTML",
+      reply_markup: buildMySubscriptionsEmptyKeyboard(locale),
+    });
+    return;
+  }
+  await ctx.editMessageText(t("subscriptions.manage_title", locale), {
+    parse_mode: "HTML",
+    reply_markup: await buildMySubscriptionsManageKeyboard(user_id!, locale),
+  });
+});
+
+router.callbackQuery(/^manage_(twitch|kick)_(\d+)$/, async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
+  const platform = ctx.match[1] as "kick" | "twitch";
+  const channel_id = Number(ctx.match[2]);
+  const follow = await getFollowByUserIdChannelIdAndPlatform(ctx.from.id, channel_id, platform);
+  if (!follow) {
+    return ctx.answerCallbackQuery({ text: t("follow.management.not_found", locale), show_alert: true });
+  }
+  const channel = await getChannelByChannelId(channel_id);
+  const url = platform === "twitch" ? `https://twitch.tv/${channel?.channel_name}` : `https://kick.com/${channel?.channel_name}`;
+  const message = t("follow.management.info", locale)
+    .replace("{name}", channel?.channel_name || `ID:${channel_id}`)
+    .replace("{platform}", t(`platform.${platform}`, locale))
+    .replace("{url}", url)
+    .replace("{date}", formatDateUTC(follow.created));
+  await ctx.editMessageText(message, {
+    parse_mode: "HTML",
+    reply_markup: buildFollowManagementKeyboard(platform, channel_id, locale),
+    disable_web_page_preview: true,
+  });
+});
+
+router.callbackQuery(/^manage_unfollow_(twitch|kick)_(\d+)$/, async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
+  const platform = ctx.match[1] as "kick" | "twitch";
+  const channel_id = Number(ctx.match[2]);
+  const channel = await getChannelByChannelId(channel_id);
+  const channelName = channel?.channel_name || `ID:${channel_id}`;
+  await removeFollowByUserIdChannelIdAndPlatfrom(ctx.from.id, channel_id, platform);
+  log.info("unfollowed via management", { userId: ctx.from.id, channel: channelName, channelId: channel_id, platform });
+  await ctx.answerCallbackQuery({ text: t("follow.management.unfollow_success", locale).replace("{name}", channelName) });
+  const follows = await getFollowsWithChannelByUserId(ctx.from.id);
+  if (follows.length < 1) {
+    await ctx.editMessageText(t("subscriptions.empty", locale), {
+      parse_mode: "HTML",
+      reply_markup: buildMySubscriptionsEmptyKeyboard(locale),
+    });
+    return;
+  }
+  await ctx.editMessageText(t("subscriptions.manage_title", locale), {
+    parse_mode: "HTML",
+    reply_markup: await buildMySubscriptionsManageKeyboard(ctx.from.id, locale),
+  });
+});
+
+router.callbackQuery(/^manage_online_(twitch|kick)_(\d+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const locale = await getUserLocale(ctx.from.id);
+  const platform = ctx.match[1] as "kick" | "twitch";
+  const channel_id = Number(ctx.match[2]);
+  log.info("checked online via management", { userId: ctx.from.id, channelId: channel_id, platform });
+  const channel = await getChannelByChannelId(channel_id);
+  const channelName = channel?.channel_name || `ID:${channel_id}`;
+  const backKb = new InlineKeyboard().text(t("follow.management.back", locale), "manage_back");
+
+  if (platform === "twitch") {
+    const streams = await getStreamsByUserIds([channel_id]);
+    if (streams.length === 0) {
+      return ctx.editMessageText(t("follow.management.online_no", locale).replace("{name}", channelName), {
+        parse_mode: "HTML",
+        reply_markup: backKb,
+      });
+    }
+    const stream = streams[0];
+    const text = t("follow.management.online_yes", locale)
+      .replace("{name}", stream.user_name)
+      .replace("{url}", `https://twitch.tv/${stream.user_name}`)
+      .replace("{viewers}", String(stream.viewer_count))
+      .replace("{game}", stream.game_name)
+      .replace("{title}", stream.title);
+    return ctx.editMessageText(text, {
+      parse_mode: "HTML",
+      reply_markup: backKb,
+      disable_web_page_preview: true,
+    });
+  } else {
+    if (!channel?.channel_name) {
+      return ctx.editMessageText(t("error.generic", locale), { parse_mode: "HTML", reply_markup: backKb });
+    }
+    const kickChannels = await getKickChannelsOnline([channel.channel_name]);
+    const liveChannel = kickChannels.find((ch) => ch.is_live);
+    if (!liveChannel) {
+      return ctx.editMessageText(t("follow.management.online_no", locale).replace("{name}", channelName), {
+        parse_mode: "HTML",
+        reply_markup: backKb,
+      });
+    }
+    const text = t("follow.management.online_yes_kick", locale)
+      .replace("{name}", liveChannel.slug)
+      .replace("{url}", `https://kick.com/${liveChannel.slug}`)
+      .replace("{viewers}", String(liveChannel.viewer_count))
+      .replace("{title}", liveChannel.stream_title);
+    return ctx.editMessageText(text, {
+      parse_mode: "HTML",
+      reply_markup: backKb,
+      disable_web_page_preview: true,
+    });
+  }
+});
+
+router.callbackQuery("manage_back", async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
+  const user_id = ctx.from?.id;
+  const follows = await getFollowsWithChannelByUserId(user_id!);
+  if (follows.length < 1) {
+    await ctx.editMessageText(t("subscriptions.empty", locale), {
+      parse_mode: "HTML",
+      reply_markup: buildMySubscriptionsEmptyKeyboard(locale),
+    });
+    return;
+  }
+  await ctx.editMessageText(t("subscriptions.manage_title", locale), {
+    parse_mode: "HTML",
+    reply_markup: await buildMySubscriptionsManageKeyboard(user_id!, locale),
+  });
 });
 
 router.callbackQuery("infoCMD", async (ctx) => {
