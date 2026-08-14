@@ -1,7 +1,10 @@
-import { Bot, Context, session, SessionFlavor } from "grammy";
+import { Bot, Context, GrammyError, session, SessionFlavor } from "grammy";
 import { BOT_TOKEN } from "../config";
 import { router as mRouter } from "./bot_router";
 import { router as cRouter } from "./bot_callback_handler";
+import { buildAdminBackKeyboard, buildBackHomeKeyboard } from "./keyboards";
+import { t } from "../i18n";
+import { getUserLocale } from "../utils/locale";
 import logger from "../logger";
 import { TwitchUser } from "../models/twitch_user";
 import { Channel } from "../database/schema";
@@ -51,6 +54,40 @@ botInstance.use(session({
 
 botInstance.use(mRouter);
 botInstance.use(cRouter);
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+botInstance.catch(async (err) => {
+  const ctx = err.ctx;
+  const e = err.error;
+  log.error(`Error while handling update ${ctx.update.update_id}`, {
+    error: e instanceof Error ? e.message : String(e),
+  });
+
+  let errorText: string;
+  if (e instanceof GrammyError) {
+    errorText = e.description;
+  } else if (e instanceof Error) {
+    errorText = e.message;
+  } else {
+    errorText = String(e);
+  }
+  if (errorText.length > 500) errorText = errorText.slice(0, 500) + "...";
+
+  try {
+    const userId = ctx.from?.id;
+    const locale = userId ? await getUserLocale(userId) : undefined;
+    const keyboard = ctx.session?.adminLogin
+      ? buildAdminBackKeyboard(locale)
+      : buildBackHomeKeyboard(locale);
+    await ctx.reply(t("error.details", locale).replace("{error}", escapeHtml(errorText)), {
+      reply_markup: keyboard,
+      parse_mode: "HTML",
+    });
+  } catch {}
+});
 
 export async function botStart() {
   botInstance.start();

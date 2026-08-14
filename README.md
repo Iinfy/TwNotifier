@@ -27,8 +27,8 @@ TwitchNotifierBot is a notification system that monitors Twitch and Kick streame
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/iinfy/twnotifier
-   cd TwitchNotifierBot
+   git clone https://github.com/infybtw/TwNotifier
+   cd TwNotifier
    ```
 
 2. Install dependencies:
@@ -99,6 +99,11 @@ bun run dev
 **Production mode** (via Docker):
 ```bash
 docker compose -f docker-compose.prod.yml up -d
+```
+
+Prebuilt images are published to GHCR on every git tag push (version tag + `latest`):
+```bash
+docker pull ghcr.io/infybtw/twnotifier:latest
 ```
 
 ### Testing

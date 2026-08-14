@@ -786,22 +786,13 @@ router.callbackQuery("admin_eventsub", async (ctx) => {
   if (ctx.session.adminLogin) {
     const subs = await getEventSubList()
     log.info(`${ctx.from.id} opened EventSub control`, { total: subs.length })
-    let message = t("admin.eventsub_header", locale)
+    const online = subs.filter(s => s.type === "stream.online").length
+    const offline = subs.filter(s => s.type === "stream.offline").length
+    const message = t("admin.eventsub_header", locale)
       .replace("{count}", subs.length.toString())
+      .replace("{online}", online.toString())
+      .replace("{offline}", offline.toString())
       .replace("{transport}", TWITCH_EVENT_TRANSPORT)
-    if (subs.length > 0) {
-      message += `\n`
-      for (const sub of subs) {
-        const icon = sub.status === "enabled" ? "✅" : "⚠️"
-        message += `${icon} <code>${sub.type}</code>\n`
-        message += `   ID: <code>${sub.id.slice(0, 16)}...</code>\n`
-        message += `   ${t("admin.label.status", locale)}: ${sub.status}\n`
-        message += `   ${t("admin.label.transport", locale)}: ${sub.transport.method}\n`
-        if (sub.condition.broadcaster_user_id) {
-          message += `   ${t("admin.label.channel_id", locale)}: <code>${sub.condition.broadcaster_user_id}</code>\n`
-        }
-      }
-    }
     ctx.editMessageText(message, { reply_markup: buildEventsubControlKeyboard(locale), parse_mode: "HTML" })
   } else {
     await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
@@ -931,20 +922,12 @@ router.callbackQuery("admin_eventsub_cleanup", async (ctx) => {
 router.callbackQuery("admin_webhook", async (ctx) => {
   const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const adminSettings = await getAdminSettings(ctx.from.id)
-    const tzOffset = adminSettings?.utc_offset ?? 0
     const subs = await getKickSubscriptions()
     log.info(`${ctx.from.id} opened Webhook control`, { total: subs.length })
-    let message = t("admin.webhook_header", locale).replace("{count}", subs.length.toString())
-    if (subs.length > 0) {
-      message += `\n`
-      for (const sub of subs) {
-        message += `📌 <code>${sub.event}</code>\n`
-        message += `   ID: <code>${sub.id}</code>\n`
-        message += `   ${t("admin.label.channel_id", locale)}: <code>${sub.broadcaster_user_id}</code>\n`
-        message += `   ${t("admin.label.created", locale)}: ${formatTimeForAdmin(sub.created_at, tzOffset)}\n`
-      }
-    }
+    const livestream = subs.filter(s => s.event === "livestream.status.updated").length
+    const message = t("admin.webhook_header", locale)
+      .replace("{count}", subs.length.toString())
+      .replace("{livestream}", livestream.toString())
     ctx.editMessageText(message, { reply_markup: buildWebhookControlKeyboard(locale), parse_mode: "HTML" })
   } else {
     await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
