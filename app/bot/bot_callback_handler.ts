@@ -26,6 +26,17 @@ import {
   buildLanguageKeyboard,
   buildAdminSettingsKeyboard,
   buildTimezoneKeyboard,
+  buildAdminUsersKeyboard,
+  buildAdminChannelsKeyboard,
+  buildAdminUserDetailKeyboard,
+  buildAdminChannelDetailKeyboard,
+  buildAdminAdminsKeyboard,
+  buildAdminAdminDetailKeyboard,
+  buildAdminKeysKeyboard,
+  buildAdminKeyDetailKeyboard,
+  buildAdminKeysBackKeyboard,
+  buildAdminFollowsKeyboard,
+  buildAdminFollowDetailKeyboard,
 } from "./keyboards";
 import { getAdminSettings, getUserByUserId, setAdminTimezoneOffset, setLanguageByUserId } from "../database/db";
 import {
@@ -41,6 +52,7 @@ import {
   getChannelsByPlatform,
   getChannelsWithFollowersByPlatform,
   getFollowByUserIdChannelIdAndPlatform,
+  getFollowsByUserId,
   getFollowsByUserIdAndPlatform,
   getFollowsWithChannelByUserId,
   getRecentStreamLogs,
@@ -634,55 +646,142 @@ router.callbackQuery(/^admin_tz_(-?\d+)$/, async (ctx) => {
   }
 })
 
+async function renderAdminChannelsPage(ctx: MyContext, page: number, locale: Locale) {
+  const channels = await getChannels()
+  const message = t("admin.channels", locale).replace("{count}", channels.length.toString())
+  await ctx.editMessageText(message, { reply_markup: buildAdminChannelsKeyboard(channels, page, locale), parse_mode: "HTML" })
+}
+
 router.callbackQuery("admin_channels", async (ctx) => {
   const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const channels = await getChannels()
-    let message = t("admin.channels", locale).replace("{count}", channels.length.toString())
-    for (const channel of channels) {
-      const icon = channel.platform === "twitch" ? "🟣" : "🟢"
-      message += `${icon} <b>${channel.channel_name}</b>\n`
-      message += `   ID: <code>${channel.channel_id}</code>\n`
-    }
-    ctx.editMessageText(message, {reply_markup: buildAdminBackKeyboard(locale), parse_mode: "HTML"})
+    await renderAdminChannelsPage(ctx, 0, locale)
   } else {
     await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
 })
+
+router.callbackQuery(/^admin_channels_page_(\d+)$/, async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
+  if (ctx.session.adminLogin) {
+    await renderAdminChannelsPage(ctx, Number(ctx.match[1]), locale)
+  } else {
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
+  }
+})
+
+router.callbackQuery(/^admin_channel_(\d+)$/, async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
+  if (!ctx.session.adminLogin) {
+    return ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
+  }
+  const channel_id = Number(ctx.match[1])
+  const channel = await getChannelByChannelId(channel_id)
+  if (!channel) {
+    return ctx.answerCallbackQuery({ text: t("admin.channel_not_found", locale), show_alert: true })
+  }
+  const platform = channel.platform === "twitch" ? "twitch" : "kick"
+  const followers = await getChannelFollowersByChannelIdAndPlatform(channel_id, platform)
+  const icon = channel.platform === "twitch" ? "🟣" : "🟢"
+  const message = t("admin.channel_info", locale)
+    .replace("{icon}", icon)
+    .replace("{name}", channel.channel_name)
+    .replace("{platform}", channel.platform || "unknown")
+    .replace("{id}", channel.channel_id.toString())
+    .replace("{followers}", followers.length.toString())
+  await ctx.editMessageText(message, { reply_markup: buildAdminChannelDetailKeyboard(locale), parse_mode: "HTML" })
+})
+
+async function renderAdminUsersPage(ctx: MyContext, page: number, locale: Locale) {
+  const users = await getUsers()
+  const message = t("admin.users", locale).replace("{count}", users.length.toString())
+  await ctx.editMessageText(message, { reply_markup: buildAdminUsersKeyboard(users, page, locale), parse_mode: "HTML" })
+}
 
 router.callbackQuery("admin_users", async (ctx) => {
   const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const adminSettings = await getAdminSettings(ctx.from.id)
-    const tzOffset = adminSettings?.utc_offset ?? 0
-    const users = await getUsers()
-    let message = t("admin.users", locale).replace("{count}", users.length.toString())
-    for (const user of users) {
-      message += `👤 <b>${user.first_name}</b> (@${user.username})\n`
-      message += `   ID: <code>${user.user_id}</code>\n`
-      message += `   📅 ${formatTimeForAdmin(user.created, tzOffset)}\n\n`
-    }
-    ctx.editMessageText(message, {reply_markup: buildAdminBackKeyboard(locale), parse_mode: "HTML"})
+    await renderAdminUsersPage(ctx, 0, locale)
   } else {
     await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
 })
 
+router.callbackQuery(/^admin_users_page_(\d+)$/, async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
+  if (ctx.session.adminLogin) {
+    await renderAdminUsersPage(ctx, Number(ctx.match[1]), locale)
+  } else {
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
+  }
+})
+
+async function renderAdminUserInfo(ctx: MyContext, user_id: number, locale: Locale, backKeyboard: InlineKeyboard): Promise<boolean> {
+  const user = await getUserByUserId(user_id)
+  if (!user) {
+    return false
+  }
+  const adminSettings = await getAdminSettings(ctx.from!.id)
+  const tzOffset = adminSettings?.utc_offset ?? 0
+  const follows = await getFollowsByUserId(user_id)
+  const message = t("admin.user_info", locale)
+    .replace("{name}", user.first_name || "—")
+    .replace("{username}", user.username ? `@${user.username}` : "—")
+    .replace("{id}", user.user_id.toString())
+    .replace("{date}", formatTimeForAdmin(user.created, tzOffset))
+    .replace("{follows}", follows.length.toString())
+    .replace("{is_admin}", user.is_admin ? "✅" : "🚫")
+  await ctx.editMessageText(message, { reply_markup: backKeyboard, parse_mode: "HTML" })
+  return true
+}
+
+router.callbackQuery(/^admin_user_(\d+)$/, async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
+  if (!ctx.session.adminLogin) {
+    return ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
+  }
+  const rendered = await renderAdminUserInfo(ctx, Number(ctx.match[1]), locale, buildAdminUserDetailKeyboard(locale))
+  if (!rendered) {
+    return ctx.answerCallbackQuery({ text: t("admin.user_not_found", locale), show_alert: true })
+  }
+})
+
+router.callbackQuery("noop", async (ctx) => {
+  await ctx.answerCallbackQuery();
+})
+
+async function renderAdminAdminsPage(ctx: MyContext, page: number, locale: Locale) {
+  const admins = await getAdmins()
+  const message = t("admin.admins", locale).replace("{count}", admins.length.toString())
+  await ctx.editMessageText(message, { reply_markup: buildAdminAdminsKeyboard(admins, page, locale), parse_mode: "HTML" })
+}
+
 router.callbackQuery("admin_admins", async (ctx) => {
   const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const adminSettings = await getAdminSettings(ctx.from.id)
-    const tzOffset = adminSettings?.utc_offset ?? 0
-    const users = await getAdmins()
-    let message = t("admin.admins", locale).replace("{count}", users.length.toString())
-    for (const user of users) {
-      message += `⚡ <b>${user.first_name}</b> (@${user.username})\n`
-      message += `   ID: <code>${user.user_id}</code>\n`
-      message += `   📅 ${formatTimeForAdmin(user.created, tzOffset)}\n\n`
-    }
-    ctx.editMessageText(message, {reply_markup: buildAdminBackKeyboard(locale), parse_mode: "HTML"})
+    await renderAdminAdminsPage(ctx, 0, locale)
   } else {
     await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
+  }
+})
+
+router.callbackQuery(/^admin_admins_page_(\d+)$/, async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
+  if (ctx.session.adminLogin) {
+    await renderAdminAdminsPage(ctx, Number(ctx.match[1]), locale)
+  } else {
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
+  }
+})
+
+router.callbackQuery(/^admin_admin_(\d+)$/, async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
+  if (!ctx.session.adminLogin) {
+    return ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
+  }
+  const rendered = await renderAdminUserInfo(ctx, Number(ctx.match[1]), locale, buildAdminAdminDetailKeyboard(locale))
+  if (!rendered) {
+    return ctx.answerCallbackQuery({ text: t("admin.user_not_found", locale), show_alert: true })
   }
 })
 
@@ -710,50 +809,58 @@ router.callbackQuery("admin_add_confirm", async (ctx) => {
   }
 })
 
+async function renderAdminKeysPage(ctx: MyContext, page: number, locale: Locale) {
+  const keys = await getAllAdminKeys()
+  if (keys.length < 1) {
+    return ctx.editMessageText(t("admin.keys_title", locale), { reply_markup: buildAdminBackKeyboard(locale), parse_mode: "HTML" })
+  }
+  const unused = keys.filter(k => !k.used).length
+  const used = keys.length - unused
+  const message = t("admin.keys_header", locale).replace("{count}", keys.length.toString())
+    + t("admin.keys_summary", locale).replace("{available}", unused.toString()).replace("{used}", used.toString())
+  await ctx.editMessageText(message, { reply_markup: buildAdminKeysKeyboard(keys, page, locale), parse_mode: "HTML" })
+}
+
 router.callbackQuery("admin_keys", async (ctx) => {
   const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const adminSettings = await getAdminSettings(ctx.from.id)
-    const tzOffset = adminSettings?.utc_offset ?? 0
-    const keys = await getAllAdminKeys()
-    if (keys.length < 1) {
-      return ctx.editMessageText(t("admin.keys_title", locale), { reply_markup: buildAdminBackKeyboard(locale), parse_mode: "HTML" })
-    }
-
-    let message = t("admin.keys_header", locale).replace("{count}", keys.length.toString())
-
-    const unused = keys.filter(k => !k.used)
-    const used = keys.filter(k => k.used)
-
-    if (unused.length > 0) {
-      message += t("admin.keys_available", locale).replace("{count}", unused.length.toString())
-      for (const k of unused) {
-        message += `\n<code>${k.key.slice(0, 16)}...</code>\n`
-        message += `   📅 ${formatDateForAdmin(k.issue_date, tzOffset)}\n`
-        message += `   👤 ${k.issued_by_name || "Unknown"} (@${k.issued_by_username || "unknown"})\n`
-      }
-    }
-
-    if (used.length > 0) {
-      message += t("admin.keys_used", locale).replace("{count}", used.length.toString())
-      for (const k of used) {
-        message += `\n<code>${k.key.slice(0, 16)}...</code>\n`
-        message += `   📅 ${formatDateForAdmin(k.issue_date, tzOffset)}\n`
-        message += `   ✅ ${k.used_date ? formatDateForAdmin(k.used_date, tzOffset) : "?"}\n`
-      }
-    }
-
-    const { InlineKeyboard } = await import("grammy")
-    const kb = new InlineKeyboard()
-    for (const k of unused) {
-      kb.text(t("admin.btn.revoke_key", locale).replace("{key}", k.key.slice(0, 8) + "..."), `admin_key_revoke_confirm_${k.id}`).row()
-    }
-    kb.text(t("buttons.back", locale), "admin_back")
-
-    ctx.editMessageText(message, { reply_markup: kb, parse_mode: "HTML" })
+    await renderAdminKeysPage(ctx, 0, locale)
   } else {
     await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
+})
+
+router.callbackQuery(/^admin_keys_page_(\d+)$/, async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
+  if (ctx.session.adminLogin) {
+    await renderAdminKeysPage(ctx, Number(ctx.match[1]), locale)
+  } else {
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
+  }
+})
+
+router.callbackQuery(/^admin_key_(\d+)$/, async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
+  if (!ctx.session.adminLogin) {
+    return ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
+  }
+  const keyId = Number(ctx.match[1])
+  const keys = await getAllAdminKeys()
+  const key = keys.find(k => k.id === keyId)
+  if (!key) {
+    return ctx.answerCallbackQuery({ text: t("admin.key_not_found", locale), show_alert: true })
+  }
+  const adminSettings = await getAdminSettings(ctx.from.id)
+  const tzOffset = adminSettings?.utc_offset ?? 0
+  const status = key.used
+    ? t("admin.key_status_used", locale).replace("{date}", key.used_date ? formatDateForAdmin(key.used_date, tzOffset) : "?")
+    : t("admin.key_status_available", locale)
+  const message = t("admin.key_info", locale)
+    .replace("{key}", `<tg-spoiler>${key.key}</tg-spoiler>`)
+    .replace("{issued_date}", formatDateForAdmin(key.issue_date, tzOffset))
+    .replace("{issued_by}", `${key.issued_by_name || "Unknown"} (@${key.issued_by_username || "unknown"})`)
+    .replace("{status}", status)
+  await ctx.editMessageText(message, { reply_markup: buildAdminKeyDetailKeyboard(key.id, key.key, key.used ?? false, locale), parse_mode: "HTML" })
 })
 
 router.callbackQuery(/^admin_key_revoke_confirm_(\d+)$/, async (ctx) => {
@@ -762,10 +869,10 @@ router.callbackQuery(/^admin_key_revoke_confirm_(\d+)$/, async (ctx) => {
     const keyId = Number(ctx.match[1])
     const revoked = await revokeAdminKey(keyId)
     if (!revoked) {
-      return ctx.editMessageText(t("admin.key_revoke_error", locale), { reply_markup: buildAdminBackKeyboard(locale), parse_mode: "HTML" })
+      return ctx.editMessageText(t("admin.key_revoke_error", locale), { reply_markup: buildAdminKeysBackKeyboard(locale), parse_mode: "HTML" })
     }
     let message = t("admin.key_revoked", locale).replace("{key}", revoked.key.slice(0, 12) + "...")
-    ctx.editMessageText(message, { reply_markup: buildAdminBackKeyboard(locale), parse_mode: "HTML" })
+    ctx.editMessageText(message, { reply_markup: buildAdminKeysBackKeyboard(locale), parse_mode: "HTML" })
   } else {
     await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
@@ -1052,42 +1159,61 @@ router.callbackQuery("admin_webhook_cleanup", async (ctx) => {
   }
 })
 
+async function renderAdminFollowsPage(ctx: MyContext, page: number, locale: Locale) {
+  const follows = await getAllFollowsWithDetails()
+  if (follows.length < 1) {
+    return ctx.editMessageText(t("admin.follows_empty", locale), { reply_markup: buildAdminBackKeyboard(locale), parse_mode: "HTML" })
+  }
+  const uniqueChannels = new Set(follows.map(f => `${f.platform}:${f.channel_id}`)).size
+  const message = t("admin.follows_header", locale)
+    .replace("{total}", follows.length.toString())
+    .replace("{channels}", uniqueChannels.toString())
+  await ctx.editMessageText(message, { reply_markup: buildAdminFollowsKeyboard(follows, page, locale), parse_mode: "HTML" })
+}
+
 router.callbackQuery("admin_follows", async (ctx) => {
   const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const adminSettings = await getAdminSettings(ctx.from.id)
-    const tzOffset = adminSettings?.utc_offset ?? 0
-    const follows = await getAllFollowsWithDetails()
-    if (follows.length < 1) {
-      return ctx.editMessageText(t("admin.follows_empty", locale), { reply_markup: buildAdminBackKeyboard(locale), parse_mode: "HTML" })
-    }
-
-    const grouped = new Map<string, typeof follows>()
-    for (const follow of follows) {
-      const key = `${follow.platform}:${follow.channel_name}`
-      const arr = grouped.get(key) || []
-      arr.push(follow)
-      grouped.set(key, arr)
-    }
-
-    let message = t("admin.follows_header", locale)
-      .replace("{total}", follows.length.toString())
-      .replace("{channels}", grouped.size.toString())
-    for (const [key, subs] of grouped) {
-      const platform = subs[0].platform
-      const channel = subs[0].channel_name
-      const platformIcon = platform === "twitch" ? "🟣" : "🟢"
-      message += `\n${platformIcon} <b>${channel}</b>\n`
-      message += `   ${subs.length} ${t("admin.label.subscribed", locale)}:\n`
-      for (const sub of subs) {
-        message += `   👤 ${sub.first_name || "Unknown"} (@${sub.username || "unknown"})\n`
-        message += `      📅 ${formatDateForAdmin(sub.created, tzOffset)}\n`
-      }
-    }
-    ctx.editMessageText(message, { reply_markup: buildAdminBackKeyboard(locale), parse_mode: "HTML" })
+    await renderAdminFollowsPage(ctx, 0, locale)
   } else {
     await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
+})
+
+router.callbackQuery(/^admin_follows_page_(\d+)$/, async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
+  if (ctx.session.adminLogin) {
+    await renderAdminFollowsPage(ctx, Number(ctx.match[1]), locale)
+  } else {
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
+  }
+})
+
+router.callbackQuery(/^admin_follow_(twitch|kick)_(\d+)_(\d+)$/, async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
+  if (!ctx.session.adminLogin) {
+    return ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
+  }
+  const platform = ctx.match[1] as "twitch" | "kick"
+  const user_id = Number(ctx.match[2])
+  const channel_id = Number(ctx.match[3])
+  const follow = await getFollowByUserIdChannelIdAndPlatform(user_id, channel_id, platform)
+  if (!follow) {
+    return ctx.answerCallbackQuery({ text: t("admin.follow_not_found", locale), show_alert: true })
+  }
+  const user = await getUserByUserId(user_id)
+  const channel = await getChannelByChannelId(channel_id)
+  const adminSettings = await getAdminSettings(ctx.from.id)
+  const tzOffset = adminSettings?.utc_offset ?? 0
+  const icon = platform === "twitch" ? "🟣" : "🟢"
+  const message = t("admin.follow_info", locale)
+    .replace("{user}", user?.first_name || "Unknown")
+    .replace("{username}", user?.username ? `@${user.username}` : "—")
+    .replace("{channel}", channel?.channel_name || `ID:${channel_id}`)
+    .replace("{icon}", icon)
+    .replace("{platform}", platform)
+    .replace("{date}", formatTimeForAdmin(follow.created, tzOffset))
+  await ctx.editMessageText(message, { reply_markup: buildAdminFollowDetailKeyboard(locale), parse_mode: "HTML" })
 })
 
 router.callbackQuery("admin_logs", async (ctx) => {
