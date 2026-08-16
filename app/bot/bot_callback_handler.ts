@@ -26,6 +26,10 @@ import {
   buildLanguageKeyboard,
   buildAdminSettingsKeyboard,
   buildTimezoneKeyboard,
+  buildAdminUsersKeyboard,
+  buildAdminChannelsKeyboard,
+  buildAdminUserDetailKeyboard,
+  buildAdminChannelDetailKeyboard,
 } from "./keyboards";
 import { getAdminSettings, getUserByUserId, setAdminTimezoneOffset, setLanguageByUserId } from "../database/db";
 import {
@@ -41,6 +45,7 @@ import {
   getChannelsByPlatform,
   getChannelsWithFollowersByPlatform,
   getFollowByUserIdChannelIdAndPlatform,
+  getFollowsByUserId,
   getFollowsByUserIdAndPlatform,
   getFollowsWithChannelByUserId,
   getRecentStreamLogs,
@@ -634,38 +639,101 @@ router.callbackQuery(/^admin_tz_(-?\d+)$/, async (ctx) => {
   }
 })
 
+async function renderAdminChannelsPage(ctx: MyContext, page: number, locale: Locale) {
+  const channels = await getChannels()
+  const message = t("admin.channels", locale).replace("{count}", channels.length.toString())
+  await ctx.editMessageText(message, { reply_markup: buildAdminChannelsKeyboard(channels, page, locale), parse_mode: "HTML" })
+}
+
 router.callbackQuery("admin_channels", async (ctx) => {
   const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const channels = await getChannels()
-    let message = t("admin.channels", locale).replace("{count}", channels.length.toString())
-    for (const channel of channels) {
-      const icon = channel.platform === "twitch" ? "🟣" : "🟢"
-      message += `${icon} <b>${channel.channel_name}</b>\n`
-      message += `   ID: <code>${channel.channel_id}</code>\n`
-    }
-    ctx.editMessageText(message, {reply_markup: buildAdminBackKeyboard(locale), parse_mode: "HTML"})
+    await renderAdminChannelsPage(ctx, 0, locale)
   } else {
     await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
 })
 
-router.callbackQuery("admin_users", async (ctx) => {
+router.callbackQuery(/^admin_channels_page_(\d+)$/, async (ctx) => {
   const locale = await getUserLocale(ctx.from.id);
   if (ctx.session.adminLogin) {
-    const adminSettings = await getAdminSettings(ctx.from.id)
-    const tzOffset = adminSettings?.utc_offset ?? 0
-    const users = await getUsers()
-    let message = t("admin.users", locale).replace("{count}", users.length.toString())
-    for (const user of users) {
-      message += `👤 <b>${user.first_name}</b> (@${user.username})\n`
-      message += `   ID: <code>${user.user_id}</code>\n`
-      message += `   📅 ${formatTimeForAdmin(user.created, tzOffset)}\n\n`
-    }
-    ctx.editMessageText(message, {reply_markup: buildAdminBackKeyboard(locale), parse_mode: "HTML"})
+    await renderAdminChannelsPage(ctx, Number(ctx.match[1]), locale)
   } else {
     await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
   }
+})
+
+router.callbackQuery(/^admin_channel_(\d+)$/, async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
+  if (!ctx.session.adminLogin) {
+    return ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
+  }
+  const channel_id = Number(ctx.match[1])
+  const channel = await getChannelByChannelId(channel_id)
+  if (!channel) {
+    return ctx.answerCallbackQuery({ text: t("admin.channel_not_found", locale), show_alert: true })
+  }
+  const platform = channel.platform === "twitch" ? "twitch" : "kick"
+  const followers = await getChannelFollowersByChannelIdAndPlatform(channel_id, platform)
+  const icon = channel.platform === "twitch" ? "🟣" : "🟢"
+  const message = t("admin.channel_info", locale)
+    .replace("{icon}", icon)
+    .replace("{name}", channel.channel_name)
+    .replace("{platform}", channel.platform || "unknown")
+    .replace("{id}", channel.channel_id.toString())
+    .replace("{followers}", followers.length.toString())
+  await ctx.editMessageText(message, { reply_markup: buildAdminChannelDetailKeyboard(locale), parse_mode: "HTML" })
+})
+
+async function renderAdminUsersPage(ctx: MyContext, page: number, locale: Locale) {
+  const users = await getUsers()
+  const message = t("admin.users", locale).replace("{count}", users.length.toString())
+  await ctx.editMessageText(message, { reply_markup: buildAdminUsersKeyboard(users, page, locale), parse_mode: "HTML" })
+}
+
+router.callbackQuery("admin_users", async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
+  if (ctx.session.adminLogin) {
+    await renderAdminUsersPage(ctx, 0, locale)
+  } else {
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
+  }
+})
+
+router.callbackQuery(/^admin_users_page_(\d+)$/, async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
+  if (ctx.session.adminLogin) {
+    await renderAdminUsersPage(ctx, Number(ctx.match[1]), locale)
+  } else {
+    await ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
+  }
+})
+
+router.callbackQuery(/^admin_user_(\d+)$/, async (ctx) => {
+  const locale = await getUserLocale(ctx.from.id);
+  if (!ctx.session.adminLogin) {
+    return ctx.editMessageText(t("admin.expired", locale), { parse_mode: "HTML" });
+  }
+  const user_id = Number(ctx.match[1])
+  const user = await getUserByUserId(user_id)
+  if (!user) {
+    return ctx.answerCallbackQuery({ text: t("admin.user_not_found", locale), show_alert: true })
+  }
+  const adminSettings = await getAdminSettings(ctx.from.id)
+  const tzOffset = adminSettings?.utc_offset ?? 0
+  const follows = await getFollowsByUserId(user_id)
+  const message = t("admin.user_info", locale)
+    .replace("{name}", user.first_name || "—")
+    .replace("{username}", user.username ? `@${user.username}` : "—")
+    .replace("{id}", user.user_id.toString())
+    .replace("{date}", formatTimeForAdmin(user.created, tzOffset))
+    .replace("{follows}", follows.length.toString())
+    .replace("{is_admin}", user.is_admin ? "✅" : "🚫")
+  await ctx.editMessageText(message, { reply_markup: buildAdminUserDetailKeyboard(locale), parse_mode: "HTML" })
+})
+
+router.callbackQuery("noop", async (ctx) => {
+  await ctx.answerCallbackQuery();
 })
 
 router.callbackQuery("admin_admins", async (ctx) => {
