@@ -1,10 +1,13 @@
 import { InlineKeyboard } from "grammy";
-import { getAdminSettings, getFollowsWithChannelByUserId, getSettingsStateByUserId, getUserByUserId } from "../database/db";
+import { getAdminSettings, getAllAdminKeys, getAllFollowsWithDetails, getFollowsWithChannelByUserId, getSettingsStateByUserId, getUserByUserId } from "../database/db";
 import { Channel, User } from "../database/schema";
 import { ADMINER_URL, PGBACKWEB_URL } from "../config";
 import { t, Locale } from "../i18n";
 
 const ADMIN_PAGE_SIZE = 10;
+
+type AdminKeyWithIssuer = Awaited<ReturnType<typeof getAllAdminKeys>>[number];
+type FollowWithDetails = Awaited<ReturnType<typeof getAllFollowsWithDetails>>[number];
 
 export async function buildHomeKeyboard(user_id: number, locale: Locale = "ru"): Promise<InlineKeyboard> {
   const user = await getUserByUserId(user_id);
@@ -268,4 +271,74 @@ export function buildAdminUserDetailKeyboard(locale: Locale = "ru"): InlineKeybo
 
 export function buildAdminChannelDetailKeyboard(locale: Locale = "ru"): InlineKeyboard {
   return new InlineKeyboard().text(t("buttons.back", locale), "admin_channels");
+}
+
+export function buildAdminAdminsKeyboard(admins: User[], page: number = 0, locale: Locale = "ru"): InlineKeyboard {
+  const kb = new InlineKeyboard();
+  const pageCount = Math.max(1, Math.ceil(admins.length / ADMIN_PAGE_SIZE));
+  const safePage = Math.min(Math.max(page, 0), pageCount - 1);
+  const pageAdmins = admins.slice(safePage * ADMIN_PAGE_SIZE, (safePage + 1) * ADMIN_PAGE_SIZE);
+  for (const admin of pageAdmins) {
+    const username = admin.username ? ` (@${admin.username})` : "";
+    kb.text(`⚡ ${admin.first_name ?? admin.user_id}${username}`, `admin_admin_${admin.user_id}`).row();
+  }
+  if (pageCount > 1) {
+    addPaginationRow(kb, safePage, pageCount, "admin_admins_page");
+  }
+  kb.text(t("buttons.back", locale), "admin_back");
+  return kb;
+}
+
+export function buildAdminAdminDetailKeyboard(locale: Locale = "ru"): InlineKeyboard {
+  return new InlineKeyboard().text(t("buttons.back", locale), "admin_admins");
+}
+
+export function buildAdminKeysKeyboard(keys: AdminKeyWithIssuer[], page: number = 0, locale: Locale = "ru"): InlineKeyboard {
+  const kb = new InlineKeyboard();
+  const pageCount = Math.max(1, Math.ceil(keys.length / ADMIN_PAGE_SIZE));
+  const safePage = Math.min(Math.max(page, 0), pageCount - 1);
+  const pageKeys = keys.slice(safePage * ADMIN_PAGE_SIZE, (safePage + 1) * ADMIN_PAGE_SIZE);
+  for (const key of pageKeys) {
+    const icon = key.used ? "✅" : "🔑";
+    kb.text(`${icon} ${key.key.slice(0, 8)}...`, `admin_key_${key.id}`).row();
+  }
+  if (pageCount > 1) {
+    addPaginationRow(kb, safePage, pageCount, "admin_keys_page");
+  }
+  kb.text(t("buttons.back", locale), "admin_back");
+  return kb;
+}
+
+export function buildAdminKeyDetailKeyboard(keyId: number, key: string, used: boolean, locale: Locale = "ru"): InlineKeyboard {
+  const kb = new InlineKeyboard();
+  if (!used) {
+    kb.text(t("admin.btn.revoke_key", locale).replace("{key}", key.slice(0, 8) + "..."), `admin_key_revoke_confirm_${keyId}`).row();
+  }
+  kb.text(t("buttons.back", locale), "admin_keys");
+  return kb;
+}
+
+export function buildAdminKeysBackKeyboard(locale: Locale = "ru"): InlineKeyboard {
+  return new InlineKeyboard().text(t("buttons.back", locale), "admin_keys");
+}
+
+export function buildAdminFollowsKeyboard(follows: FollowWithDetails[], page: number = 0, locale: Locale = "ru"): InlineKeyboard {
+  const kb = new InlineKeyboard();
+  const pageCount = Math.max(1, Math.ceil(follows.length / ADMIN_PAGE_SIZE));
+  const safePage = Math.min(Math.max(page, 0), pageCount - 1);
+  const pageFollows = follows.slice(safePage * ADMIN_PAGE_SIZE, (safePage + 1) * ADMIN_PAGE_SIZE);
+  for (const follow of pageFollows) {
+    const icon = follow.platform === "twitch" ? "🟣" : "🟢";
+    const user = follow.username ? `@${follow.username}` : (follow.first_name ?? follow.user_id);
+    kb.text(`${icon} ${follow.channel_name} — ${user}`, `admin_follow_${follow.platform}_${follow.user_id}_${follow.channel_id}`).row();
+  }
+  if (pageCount > 1) {
+    addPaginationRow(kb, safePage, pageCount, "admin_follows_page");
+  }
+  kb.text(t("buttons.back", locale), "admin_back");
+  return kb;
+}
+
+export function buildAdminFollowDetailKeyboard(locale: Locale = "ru"): InlineKeyboard {
+  return new InlineKeyboard().text(t("buttons.back", locale), "admin_follows");
 }
